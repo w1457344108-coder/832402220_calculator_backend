@@ -10,6 +10,8 @@ FastAPI backend for the separated calculator assignment. The browser sends an ar
 
 The backend is deployed on Render and uses a Neon PostgreSQL database. The free Render service may sleep when it is idle, so the first request after a period of inactivity can take longer while the service wakes up.
 
+SQLAlchemy checks pooled connections before reusing them. If Neon has closed an idle connection, the backend replaces it before executing a database query.
+
 ## Architecture
 
 ```text
@@ -182,7 +184,7 @@ With the virtual environment active:
 pytest
 ```
 
-The tests cover precedence, parentheses, unary signs, decimal arithmetic, malformed expressions, division by zero, URL normalization, and the health/calculate/history/delete API flow. The API test module uses an in-memory SQLite database so it does not alter a local PostgreSQL database.
+The tests cover precedence, parentheses, unary signs, decimal arithmetic, malformed expressions, division by zero, URL normalization, reconnecting after an idle connection closes, and the health/calculate/history/delete API flow. The API test module uses an in-memory SQLite database; the connection recovery test uses a temporary SQLite file. Neither test changes a local or deployed PostgreSQL database.
 
 ## Neon PostgreSQL configuration
 

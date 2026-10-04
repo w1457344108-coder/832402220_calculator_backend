@@ -24,7 +24,7 @@ DATABASE_URL = normalize_database_url(
     os.getenv("DATABASE_URL", "sqlite+pysqlite:///./calculator.db")
 )
 connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
-engine_kwargs = {"future": True, "connect_args": connect_args}
+engine_kwargs = {"future": True, "connect_args": connect_args, "pool_pre_ping": True}
 if DATABASE_URL in {"sqlite:///:memory:", "sqlite+pysqlite:///:memory:"}:
     engine_kwargs["poolclass"] = StaticPool
 engine = create_engine(DATABASE_URL, **engine_kwargs)
