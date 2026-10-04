@@ -13,7 +13,16 @@ class Base(DeclarativeBase):
     pass
 
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+pysqlite:///./calculator.db")
+def normalize_database_url(url: str) -> str:
+    """Use the psycopg 3 SQLAlchemy dialect for Neon PostgreSQL URLs."""
+    if url.startswith("postgresql://"):
+        return url.replace("postgresql://", "postgresql+psycopg://", 1)
+    return url
+
+
+DATABASE_URL = normalize_database_url(
+    os.getenv("DATABASE_URL", "sqlite+pysqlite:///./calculator.db")
+)
 connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
 engine_kwargs = {"future": True, "connect_args": connect_args}
 if DATABASE_URL in {"sqlite:///:memory:", "sqlite+pysqlite:///:memory:"}:
