@@ -29,7 +29,19 @@ def test_evaluate_rejects_division_by_zero():
         evaluate_expression("10/(3-3)")
 
 
-@pytest.mark.parametrize("expression", ["", "1..2", "(1+2", "1+", "2 3"])
+@pytest.mark.parametrize(
+    "expression",
+    [
+        "",
+        "1..2",
+        "(1+2",
+        "1+",
+        "2 3",
+        "__import__('os')",
+        "eval(1+1)",
+        "1;2",
+    ],
+)
 def test_evaluate_rejects_malformed_expression(expression):
     with pytest.raises(CalculationError):
         evaluate_expression(expression)
