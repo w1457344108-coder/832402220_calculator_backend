@@ -53,6 +53,55 @@ def test_calculate_returns_bilingual_error():
     assert client.get("/api/history").json() == before.json()
 
 
+def test_calculate_scientific_expression_is_saved_with_bounded_result():
+    client = TestClient(app)
+    response = client.post("/api/calculate", json={"expression": "sqrt(9)+sin(π/2)"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["success"] is True
+    assert body["expression"] == "sqrt(9)+sin(π/2)"
+    assert body["result"] == "4"
+    assert len(body["result"]) <= 200
+
+    saved = next(item for item in client.get("/api/history").json() if item["id"] == body["id"])
+    assert saved["result"] == "4"
+    assert client.delete(f"/api/history/{body['id']}").status_code == 204
+
+
+def test_new_scientific_errors_are_bilingual_and_do_not_write_history():
+    client = TestClient(app)
+    before = client.get("/api/history").json()
+
+    domain = client.post("/api/calculate", json={"expression": "sqrt(-1)"})
+    assert domain.status_code == 400
+    assert domain.json() == {
+        "success": False,
+        "code": "DOMAIN_ERROR",
+        "message": {"zh": "数值超出定义域", "en": "Operation is outside its domain"},
+    }
+
+    out_of_range = client.post("/api/calculate", json={"expression": "1e10001"})
+    assert out_of_range.status_code == 400
+    assert out_of_range.json() == {
+        "success": False,
+        "code": "RESULT_OUT_OF_RANGE",
+        "message": {"zh": "结果超出范围", "en": "Result is out of range"},
+    }
+
+    assert client.get("/api/history").json() == before
+
+
+def test_structural_validation_errors_remain_422():
+    client = TestClient(app)
+
+    empty = client.post("/api/calculate", json={"expression": ""})
+    assert empty.status_code == 422
+
+    too_long = client.post("/api/calculate", json={"expression": "1" * 501})
+    assert too_long.status_code == 422
+
+
 def test_history_is_newest_first_and_missing_delete_returns_not_found():
     client = TestClient(app)
     first = client.post("/api/calculate", json={"expression": "1+1"}).json()

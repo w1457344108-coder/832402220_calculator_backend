@@ -26,6 +26,10 @@ Neon PostgreSQL
 
 The frontend never connects directly to PostgreSQL. It calls the backend endpoints, and the backend owns expression evaluation, validation, CORS, and persistence.
 
+The calculator accepts decimal numbers (including scientific notation such as `1.2e-3`), parentheses, unary signs, binary `+ - * /`, right-associative `^`, the constants `pi`, `π`, and `e`, and the fixed one-argument functions `sin`, `cos`, `tan`, `sqrt`, `ln`, `log10`, and `exp`. Trigonometric functions use radians. `×` and `÷` are display-only frontend symbols and are sent as `*` and `/`.
+
+The parser uses a fixed whitelist and never evaluates arbitrary Python. It limits expressions to 500 characters and structural depth to 32. Decimal results are bounded to decimal magnitude `10^-10000` through `10^10000`; trigonometric arguments are bounded to `1e6`, and tangent rejects a numerical near-pole zone where `abs(cos(x)) <= 1e-9`. Trigonometric values are binary64 approximations (about 15 significant digits), while the other scientific functions use the existing 50-digit Decimal context. Results are normalized as strings; ordinary fixed-point output is retained when it fits and longer values use compact scientific notation, always within 200 characters.
+
 ## Directory guide
 
 | Path | Role |
@@ -141,7 +145,7 @@ On success, returns `200 OK` and writes one history row:
 }
 ```
 
-Division by zero returns the same `400` shape with `code: "DIVISION_BY_ZERO"`; these errors do not create history records. Missing or structurally invalid request bodies, including an empty or over-500-character expression, are rejected by FastAPI with `422` and its standard `detail` validation response.
+Division by zero returns the same `400` shape with `code: "DIVISION_BY_ZERO"`. Domain failures such as `sqrt(-1)`, `ln(0)`, `0^0`, and a negative base with a non-integer exponent use `code: "DOMAIN_ERROR"`. Numeric or intermediate values outside the protected range use `code: "RESULT_OUT_OF_RANGE"`. All these failures do not create history records. Missing or structurally invalid request bodies, including an empty or over-500-character expression, are rejected by FastAPI with `422` and its standard `detail` validation response.
 
 ### `GET /api/history`
 
@@ -172,7 +176,7 @@ Deletes the row and returns `204 No Content` on success. A missing id returns `4
 
 ## Expression safety
 
-The service uses a hand-written parser and `Decimal` with a precision of 50 significant digits; it does not call `eval`, execute shell commands, or interpret arbitrary Python. Supported input is limited to decimal numbers, whitespace, parentheses, binary `+ - * /`, and unary `+` or `-`. Names, strings, commas, exponent notation, function calls, and other characters are rejected. Results are normalized decimal strings rather than JSON floating-point numbers.
+The service uses a hand-written parser and `Decimal` with a precision of 50 significant digits; it does not call `eval`, execute shell commands, or interpret arbitrary Python. Supported input is limited to the numbers, operators, constants, and fixed functions listed above. Attribute access, strings, commas, imports, unknown names, and other characters are rejected. Results are normalized decimal strings rather than JSON floating-point numbers.
 
 This basic assignment has no login or user isolation: all visitors share the same history and can delete its records. CORS controls permitted browser origins; it is not user authentication.
 
@@ -184,7 +188,7 @@ With the virtual environment active:
 pytest
 ```
 
-The tests cover precedence, parentheses, unary signs, decimal arithmetic, malformed expressions, division by zero, URL normalization, reconnecting after an idle connection closes, and the health/calculate/history/delete API flow. The API test module uses an in-memory SQLite database; the connection recovery test uses a temporary SQLite file. Neither test changes a local or deployed PostgreSQL database.
+The tests cover precedence, parentheses, unary signs, decimal and scientific arithmetic, fixed scientific functions, malformed expressions, domain and range errors, division by zero, URL normalization, reconnecting after an idle connection closes, and the health/calculate/history/delete API flow. The API test module uses an in-memory SQLite database; the connection recovery test uses a temporary SQLite file. Neither test changes a local or deployed PostgreSQL database.
 
 ## Neon PostgreSQL configuration
 

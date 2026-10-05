@@ -9,7 +9,13 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .calculator import CalculationError, DivisionByZeroError, evaluate_expression
+from .calculator import (
+    CalculationError,
+    DivisionByZeroError,
+    DomainError,
+    ResultOutOfRangeError,
+    evaluate_expression,
+)
 from .database import Base, engine, get_db
 from .models import CalculationHistory
 
@@ -42,6 +48,8 @@ def _message(code: str) -> dict[str, str]:
     return {
         "INVALID_EXPRESSION": {"zh": "表达式无效", "en": "Invalid expression"},
         "DIVISION_BY_ZERO": {"zh": "除数不能为零", "en": "Division by zero is not allowed"},
+        "DOMAIN_ERROR": {"zh": "数值超出定义域", "en": "Operation is outside its domain"},
+        "RESULT_OUT_OF_RANGE": {"zh": "结果超出范围", "en": "Result is out of range"},
         "NOT_FOUND": {"zh": "记录不存在", "en": "Record not found"},
     }[code]
 
@@ -67,8 +75,15 @@ def calculate(payload: CalculateRequest, db: Session = Depends(get_db)) -> dict[
         result = evaluate_expression(payload.expression)
     except DivisionByZeroError:
         raise HTTPException(status_code=400, detail={"success": False, "code": "DIVISION_BY_ZERO", "message": _message("DIVISION_BY_ZERO")})
+    except DomainError:
+        raise HTTPException(status_code=400, detail={"success": False, "code": "DOMAIN_ERROR", "message": _message("DOMAIN_ERROR")})
+    except ResultOutOfRangeError:
+        raise HTTPException(status_code=400, detail={"success": False, "code": "RESULT_OUT_OF_RANGE", "message": _message("RESULT_OUT_OF_RANGE")})
     except CalculationError:
         raise HTTPException(status_code=400, detail={"success": False, "code": "INVALID_EXPRESSION", "message": _message("INVALID_EXPRESSION")})
+    if len(result) > 200:
+        # Keep the database contract defensive if the evaluator changes later.
+        raise HTTPException(status_code=400, detail={"success": False, "code": "RESULT_OUT_OF_RANGE", "message": _message("RESULT_OUT_OF_RANGE")})
     record = CalculationHistory(expression=payload.expression.strip(), result=result)
     db.add(record)
     db.commit()
